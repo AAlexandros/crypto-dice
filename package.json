@@ -1,8 +1,8 @@
 {
-  "name": "crypto-sos",
+  "name": "crypto-dice",
   "version": "0.1.0",
-  "description": "Blockchain sos game",
-  "author": "antonov20@aueb.gr",
+  "description": "Blockchain dice game",
+  "author": "",
   "dependencies": {
     "@openzeppelin/contracts": "^2.3.0",
     "bootstrap": "^4.3.1",

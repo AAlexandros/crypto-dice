@@ -1,7 +1,5 @@
-const CryptoSOS = artifacts.require("CryptoSOS");
-const MultySOS = artifacts.require("MultySOS");
+const CryptoDice = artifacts.require("CryptoDice");
 
 module.exports = function(deployer) {
-  deployer.deploy(CryptoSOS);
-  deployer.deploy(MultySOS);
+  deployer.deploy(CryptoDice);
 };

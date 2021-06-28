@@ -1,7 +1,7 @@
 pragma solidity 0.7;
 
 
-contract CryptoSOS{
+contract CryptoDice{
     address payable public owner;
     address payable internal player1;
     address payable internal player2;
