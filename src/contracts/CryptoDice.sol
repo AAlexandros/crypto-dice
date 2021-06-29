@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENCED
-pragma solidity 0.7.6;
+pragma solidity 0.8.4;
 
 contract CryptoDice {
 
@@ -16,12 +16,12 @@ contract CryptoDice {
         * Every change of these variables costs gas, and so should be done with caution.
     */
 
-    address payable private owner;
+    address private owner;
     // Used to lock owner's profit while a game is conducted.
     uint private ownersProfitLocked;
 
-    address payable private firstPlayer;
-    address payable private secondPlayer;
+    address private firstPlayer;
+    address private secondPlayer;
 
     // The timestamp of the block, when the first player joined.
     uint private firstPlayerJoinedTime;
@@ -48,7 +48,7 @@ contract CryptoDice {
         * The external public API.
     */
     function play(bytes32 _hashcode) external payable checkStateForPlay {
-        address payable playerAddress = msg.sender;
+        address playerAddress = msg.sender;
         // The first player joins the game.
         if (isEmpty(firstPlayer)) {
             // Lock the ether of the first player.
@@ -87,28 +87,28 @@ contract CryptoDice {
 
     function collectProfit() external isOwner {
         uint ownersProfit = address(this).balance - ownersProfitLocked;
-        owner.transfer(ownersProfit);
+        payable(owner).transfer(ownersProfit);
     }
 
     function cancel() external isInTheGame checkStateForCancel {
-        address payable firstPlayerTemp = firstPlayer;
+        address firstPlayerTemp = firstPlayer;
         firstPlayer = address(0);
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        firstPlayerTemp.transfer(1 ether);
+        payable(firstPlayerTemp).transfer(1 ether);
     }
 
     function ur2slow() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
         // Player wins the game because of the idleness of him opponent
-        address payable winningPlayerTemp = msg.sender;
+        address winningPlayerTemp = msg.sender;
         //emit DiceReveal(winningPlayerTemp, 0, 0);
         clearDice();
         clearAddresses();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        winningPlayerTemp.transfer(1.9 ether);
+        payable(winningPlayerTemp).transfer(1.9 ether);
     }
 
     /*
@@ -142,25 +142,25 @@ contract CryptoDice {
         }
     }
 
-    function endWin(address payable winningPlayer) internal {
+    function endWin(address winningPlayer) internal {
         clearDice();
         clearAddresses();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        winningPlayer.transfer(1.8 ether);
+        payable(winningPlayer).transfer(1.8 ether);
     }
 
     function endDraw() internal {
-        address payable firstPlayerTemp = firstPlayer;
-        address payable secondPlayerTemp = secondPlayer;
+        address firstPlayerTemp = firstPlayer;
+        address secondPlayerTemp = secondPlayer;
         clearDice();
         clearAddresses();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        firstPlayerTemp.transfer(0.9 ether);
-        secondPlayerTemp.transfer(0.9 ether);
+        payable(firstPlayerTemp).transfer(0.9 ether);
+        payable(secondPlayerTemp).transfer(0.9 ether);
     }
 
     function clearAddresses() internal {
@@ -271,7 +271,7 @@ contract CryptoDice {
         isEmpty_ =  _addressToCheck == address(0);
     }
 
-    function getOtherPlayer(address player) internal view returns (address payable) {
+    function getOtherPlayer(address player) internal view returns (address) {
         if (player == firstPlayer) {
             return secondPlayer;
         }
