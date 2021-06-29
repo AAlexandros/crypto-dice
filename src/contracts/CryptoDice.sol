@@ -6,19 +6,15 @@ contract CryptoDice {
     /*
         * Constants
     */
+    uint n = 16;
 
-    // The game's symbols. Would prefer them as enums but this format is cheaper and easier to implement.
-    byte private SYMBOL_S = "S";
-    byte private SYMBOL_O = "O";
-    byte private SYMBOL_DASH = "-";
+    uint DICE_MAX = 6;
+
 
     /*
         * State variables. These variables are saved in the state on the contract.
         * Every change of these variables costs gas, and so should be done with caution.
     */
-
-    // The 3x3 grid of the game. It is more efficient to keep it as a byte array and cast it to string when needed externally.
-    bytes private grid;
 
     address payable private owner;
     // Used to lock owner's profit while a game is conducted.
@@ -27,30 +23,31 @@ contract CryptoDice {
     address payable private firstPlayer;
     address payable private secondPlayer;
 
-    // The address of the player playing.
-    address payable private playerPlaying;
-
     // The timestamp of the block, when the first player joined.
     uint private firstPlayerJoinedTime;
 
-    // The timer for the player move.
+    // The timer to count the time the second has to commit his initial seed.
     uint private timer;
 
+    bytes32 private blockHash;
+
+    mapping(address => bytes32) public hashSeeds;
+    mapping(address => bytes32) public revealedSeeds;
+
     /*
-        *CryptoSOS Events.
+        *CryptoDice Events.
     */
     event NewGame(address _firstPlayer, address _secondPlayer);
-    event MoveEvent(address _playerAddress, uint8 _placement, uint8 _symbol);
+    event DiceReveal(uint _firstDie, uint _secondDie);
 
     constructor() {
         owner = msg.sender;
-        constructGame();
     }
 
     /*
         * The external public API.
     */
-    function play() external payable checkStateForPlay {
+    function play(bytes32 _hashcode) external payable checkStateForPlay {
         address payable playerAddress = msg.sender;
         // The first player joins the game.
         if (isEmpty(firstPlayer)) {
@@ -59,37 +56,33 @@ contract CryptoDice {
             // Record the time of the block when the first player joined, needed for the cancel method.
             firstPlayerJoinedTime = block.timestamp;
             firstPlayer = playerAddress;
-            // When the first player joins the game, an event that has 0 as the second address is omited.
+            // When the first player joins the game, an event that has 0 as the second address is emitted.
             emit NewGame(firstPlayer, address(0));
         }
         // The second player joins the game.
         else if (isEmpty(secondPlayer)) {
             // Lock another ether for the second player.
             ownersProfitLocked = ownersProfitLocked + 1 ether;
-            // Initialize the timer of this game.
-            timer = block.timestamp;
             secondPlayer = playerAddress;
+            blockHash = blockhash(block.number - 1);
             // Now both players are present and the game begins.
             emit NewGame(firstPlayer, secondPlayer);
-            playerPlaying = firstPlayer;
         }
         // This case should have been caught by the modifier.
         // If the code enters this, something has gone really wrong.
         else {
             revert ("Illegal state reached.");
         }
+        hashSeeds[msg.sender] = _hashcode;
     }
 
-    function placeS(uint8 _placement) external isInTheGame checkStateForPlace(_placement) {
-        place(_placement, SYMBOL_S);
-    }
-
-    function placeO(uint8 _placement) external isInTheGame checkStateForPlace(_placement) {
-        place(_placement, SYMBOL_O);
-    }
-
-    function getGameState() external view returns(string memory grid_) {
-        grid_ = string(grid);
+    function revealDice(bytes32 _seed) external isInTheGame checkStateReveal() {
+        // Keep track of the time passed from the dice reveal.
+        timer = block.timestamp;
+        hashSeeds[msg.sender] = _seed;
+        if (revealedSeeds[firstPlayer] != 0 && revealedSeeds[secondPlayer] != 0) {
+            endGame();
+        }
     }
 
     function collectProfit() external isOwner {
@@ -107,108 +100,62 @@ contract CryptoDice {
     }
 
     function ur2slow() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
-        address payable winningPlayerTemp = getPlayerNotPlaying();
-        emit MoveEvent(winningPlayerTemp, 0, 0);
+        // Player wins the game because of the idleness of him opponent
+        address payable winningPlayerTemp = msg.sender;
+        //emit DiceReveal(winningPlayerTemp, 0, 0);
+        clearDice();
         clearAddresses();
-        clearBoard();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
         winningPlayerTemp.transfer(1.9 ether);
     }
 
-    // Because the players can make the game stuck the game by not playing at all, the owner can intervene after 5 minutes.
-    // After calling this method, the players are kicked and the host takes the full ether amount.
-    function gameExpired() external hasGameStarted isOwner didTimePassed(300) {
-        clearAddresses();
-        clearBoard();
-        ownersProfitLocked = 0;
-    }
-
     /*
         * Helper Functions.
     */
-    function place(uint8 _placement, byte  _symbol) internal {
-        uint8 arrayPlacement = _placement - 1;
-        // Check if the input corresponds to an empty grid slot. Revert if not.
-        require(grid[arrayPlacement] == SYMBOL_DASH, "The grid slot selected was not an empty slot.");
-        // Make the change to the grid.
-        grid[arrayPlacement] = _symbol;
-        // Emit a move Event.
-        emit MoveEvent(playerPlaying, _placement, convertFromSymbolToNumber(_symbol));
-        // Check if the player won by making the move.
-        if (isWinning(_placement)) {
-            endWin();
-            return;
-        }
-        // Check if the game concluded with a draw.
-        if (isDraw()) {
+
+    function endGame() internal {
+        if (!checkSeed(firstPlayer) && !checkSeed(secondPlayer)){
             endDraw();
-            return;
         }
-        // Change the player playing.
-        playerPlaying = getPlayerNotPlaying();
-        // Reset the timer for the next turn.
-        timer = block.timestamp;
+
+        if (!checkSeed(firstPlayer)) {
+            endWin(secondPlayer);
+        }
+
+        if (!checkSeed(secondPlayer)) {
+            endWin(firstPlayer);
+        }
+
+        (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
+        emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
+
+        if (resultFirstPlayer > resultSecondPlayer) {
+            endWin(firstPlayer);
+        }
+        else if (resultFirstPlayer < resultSecondPlayer){
+            endWin(secondPlayer);
+        }
+        else {
+            endDraw();
+        }
     }
 
-    function isWinning(uint8 _placement) internal view returns (bool won_) {
-        if (_placement == 5) {
-            return checkCross() || checkDiagonals();
-        }
-        if (_placement == 1 || _placement == 3 || _placement == 7 || _placement == 9) {
-            return checkCross() || checkFrame();
-        }
-        if (_placement == 2 || _placement == 4 || _placement == 6 || _placement == 8) {
-            return checkDiagonals() || checkFrame();
-        }
-    }
-
-    function isDraw() internal view returns (bool won_) {
-        for (uint8 i=0; i<9; i++) {
-            if(grid[i] == SYMBOL_DASH) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    function checkCross() internal view returns (bool won_) {
-        if ((isS(1) && isO(5) && isS(9)) || (isS(3) && isO(5) && isS(7))){
-            return true;
-        }
-        return false;
-    }
-
-    function checkDiagonals() internal view returns (bool won_) {
-        if ((isS(2) && isO(5) && isS(8)) || (isS(4) && isO(5) && isS(6))){
-            return true;
-        }
-        return false;
-    }
-
-    function checkFrame() internal view returns (bool won_) {
-        if ((isS(1) && isO(2) && isS(3)) || (isS(3) && isO(6) && isS(9)) || (isS(7) && isO(8) && isS(9)) || (isS(1) && isO(4) && isS(7))){
-            return true;
-        }
-        return false;
-    }
-
-    function endWin() internal {
-        address payable winningPlayerTemp = playerPlaying;
+    function endWin(address payable winningPlayer) internal {
+        clearDice();
         clearAddresses();
-        clearBoard();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        winningPlayerTemp.transfer(1.8 ether);
+        winningPlayer.transfer(1.8 ether);
     }
 
     function endDraw() internal {
         address payable firstPlayerTemp = firstPlayer;
         address payable secondPlayerTemp = secondPlayer;
+        clearDice();
         clearAddresses();
-        clearBoard();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
@@ -216,28 +163,32 @@ contract CryptoDice {
         secondPlayerTemp.transfer(0.9 ether);
     }
 
-    function constructGame() internal {
-        grid = new bytes(9);
-        clearBoard();
-    }
-
     function clearAddresses() internal {
         firstPlayer = address(0);
         secondPlayer = address(0);
-        playerPlaying = address(0);
     }
 
-    function clearBoard() internal {
-        for (uint8 i=0; i<9; i++) {
-            grid[i] = SYMBOL_DASH;
-        }
+    function clearDice() internal {
+        delete hashSeeds[firstPlayer];
+        delete hashSeeds[secondPlayer];
+        delete revealedSeeds[firstPlayer];
+        delete revealedSeeds[secondPlayer];
     }
 
-    function getPlayerNotPlaying() internal view returns (address payable player_) {
-        if (playerPlaying == firstPlayer) {
-            return secondPlayer;
-        }
-        return firstPlayer;
+    function getRandoms() internal view returns(uint,uint) {
+        bytes32 _seedA = hashSeeds[firstPlayer];
+        bytes32 _seedB = hashSeeds[secondPlayer];
+
+        bytes32 nOnes = bytes32(2 **(16*n) - 1); // Creates 16 1s bytes
+        bytes32 leftMask = nOnes << ((32 - n)*8); // Shift left by 32-n positions bytes
+        bytes32 rightMask = nOnes >> ((32 - n)*8); //Shift right by 32-n positions bytes
+        bytes32 leftA =  _seedA & leftMask;
+        bytes32 rightA =  _seedA & rightMask;
+        bytes32 leftB =  _seedB & leftMask;
+        bytes32 rightB =  _seedB & rightMask;
+        uint randomA = uint((leftA | rightB) ^ blockHash) % DICE_MAX;
+        uint randomB = uint((leftB | rightA) ^ blockHash) % DICE_MAX;
+        return (randomA, randomB);
     }
 
     /*
@@ -250,17 +201,14 @@ contract CryptoDice {
         require(isEmpty(firstPlayer) || isEmpty(secondPlayer), "The game has already started.");
         // Check if the player has already queued as first player.
         require(msg.sender != firstPlayer, "You have already queued to play.");
-        // Exacly one Ether ether is required to play, in all other cases, the function call will be reverted.
+        // Exactly one Ether ether is required to play, in all other cases, the function call will be reverted.
         require(msg.value == 1 ether, "The amount of Ether to participate should be 1 Ether.");
         _;
     }
 
-    // Checks if the place functions can be called for the specific user, for the specific state of the game.
-    modifier checkStateForPlace(uint8 _placement) {
-        // Checks if it is this player's turn to play.
-        require(msg.sender == playerPlaying, "It is not your turn to play.");
-        // Checks if the input is out of bounce.
-        require(_placement > 0 && _placement < 10, "The input given is not valid.");
+    modifier checkStateReveal() {
+        // Checks if the player has not yet committed a dice.
+        require(revealedSeeds[msg.sender] == 0, "You have already reveal a dice.");
         _;
     }
 
@@ -273,8 +221,8 @@ contract CryptoDice {
     }
 
     modifier checkStateForUr2slow() {
-        // A player cannot call this function if it is his turn.
-        require(msg.sender != playerPlaying, "You cannot call the ur2slow function in your turn.");
+        // A player cannot call this function if he hasn't committed revealed his seed.
+        require(revealedSeeds[msg.sender] != 0, "You can not cancel the game you haven't revealed your seed.");
         _;
     }
 
@@ -303,29 +251,30 @@ contract CryptoDice {
 
     // Checks if a certain amount of time has passed from the last update of the timer.
     modifier didTimePassed(uint _timePassed) {
-        require(block.timestamp - timer > _timePassed, string(abi.encodePacked("The time passed from the last update of the timer, is not enought to call this function.")));
+        require(block.timestamp - timer > _timePassed, string(abi.encodePacked("The time passed from the last update of the timer, is not enough to call this function.")));
         _;
     }
 
     /*
         *Utility Functions.
     */
+    function checkSeed(address player) internal view returns (bool) {
+        return keccak256(toBytes(revealedSeeds[player])) == hashSeeds[player];
+    }
+
+    function toBytes(bytes32 x) public pure returns (bytes memory b) {
+        b = new bytes(32);
+        assembly { mstore(add(b, 32), x) }
+    }
+
     function isEmpty(address _addressToCheck) internal pure returns (bool isEmpty_) {
         isEmpty_ =  _addressToCheck == address(0);
     }
 
-    function isS(uint8 _placement) internal view returns (bool isS_) {
-        isS_ = grid[_placement-1] == SYMBOL_S;
-    }
-
-    function isO(uint8 _placement) internal view returns (bool isO_) {
-        isO_ = grid[_placement-1] == SYMBOL_O;
-    }
-
-    function convertFromSymbolToNumber(byte _symbol) internal view returns (uint8) {
-        if (_symbol == SYMBOL_S) {
-            return 1;
+    function getOtherPlayer(address player) internal view returns (address payable) {
+        if (player == firstPlayer) {
+            return secondPlayer;
         }
-        return 2;
+        return firstPlayer;
     }
 }
