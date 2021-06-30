@@ -8,7 +8,8 @@ contract CryptoDice {
     */
     uint n = 16;
 
-    uint DICE_MAX = 6;
+    // Because the modulo will take 0-DICE_MAX values, we use DICE_MAX=5 and add 1
+    uint DICE_MAX = 5;
 
 
     /*
@@ -128,27 +129,28 @@ contract CryptoDice {
             endWin(firstPlayer);
         }
 
-//        (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
-//        emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
-//
-//        if (resultFirstPlayer > resultSecondPlayer) {
-//            endWin(firstPlayer);
-//        }
-//        else if (resultFirstPlayer < resultSecondPlayer){
-//            endWin(secondPlayer);
-//        }
-//        else {
-//            endDraw();
-//        }
+        (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
+        emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
+
+        if (resultFirstPlayer > resultSecondPlayer) {
+            endWin(firstPlayer);
+        }
+        else if (resultFirstPlayer < resultSecondPlayer){
+            endWin(secondPlayer);
+        }
+        else {
+            endDraw();
+        }
     }
 
     function endWin(address payable winningPlayer) internal {
+        address payable winningPlayerTemp = winningPlayer;
         clearDice();
         clearAddresses();
         // Unlock the owner's profit.
         ownersProfitLocked = 0;
         // Paying should always be the last action!
-        winningPlayer.transfer(1.8 ether);
+        winningPlayerTemp.transfer(1.8 ether);
     }
 
     function endDraw() internal {
@@ -179,15 +181,18 @@ contract CryptoDice {
         bytes32 _seedA = hashSeeds[firstPlayer];
         bytes32 _seedB = hashSeeds[secondPlayer];
 
-        bytes32 nOnes = bytes32(2 **(16*n) - 1); // Creates 16 1s bytes
-        bytes32 leftMask = nOnes << ((32 - n)*8); // Shift left by 32-n positions bytes
-        bytes32 rightMask = nOnes >> ((32 - n)*8); //Shift right by 32-n positions bytes
+        // Creates 16 1s bytes
+        bytes32 nOnes = bytes32(2 **(16*n) - 1);
+        // Shift left by 32-n positions bytes
+        bytes32 leftMask = nOnes << ((32 - n)*8);
+        //Shift right by 32-n positions bytes
+        bytes32 rightMask = nOnes >> ((32 - n)*8);
         bytes32 leftA =  _seedA & leftMask;
         bytes32 rightA =  _seedA & rightMask;
         bytes32 leftB =  _seedB & leftMask;
         bytes32 rightB =  _seedB & rightMask;
-        uint randomA = uint((leftA | rightB) ^ blockHash) % DICE_MAX;
-        uint randomB = uint((leftB | rightA) ^ blockHash) % DICE_MAX;
+        uint randomA = (uint((leftA | rightB) ^ blockHash) % DICE_MAX) + 1;
+        uint randomB = (uint((leftB | rightA) ^ blockHash) % DICE_MAX) + 1;
         return (randomA, randomB);
     }
 
