@@ -9,7 +9,7 @@ contract CryptoDice {
     uint n = 16;
 
     // Because the modulo will take 0-DICE_MAX values, we use DICE_MAX=5 and add 1
-    uint DICE_MAX = 5;
+    uint DICE_MAX = 6;
 
 
     /*
@@ -66,7 +66,6 @@ contract CryptoDice {
             // Lock another ether for the second player.
             ownersProfitLocked = ownersProfitLocked + 1 ether;
             secondPlayer = playerAddress;
-            blockHash = blockhash(block.number - 1);
             // Now both players are present and the game begins.
             emit NewGame(firstPlayer, secondPlayer);
         }
@@ -100,10 +99,15 @@ contract CryptoDice {
         firstPlayerTemp.transfer(1 ether);
     }
 
-    function ur2slow() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
+    function endOfTime() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
         // Player wins the game because of the idleness of him opponent
         address payable winningPlayerTemp = msg.sender;
-        //emit DiceReveal(winningPlayerTemp, 0, 0);
+        if (revealedSeeds[firstPlayer] != 0) {
+            DiceReveal(1, 0);
+        }
+        else {
+            DiceReveal(0, 1);
+        }
         clearDice();
         clearAddresses();
         // Unlock the owner's profit.
@@ -117,29 +121,41 @@ contract CryptoDice {
     */
 
     function endGame() internal {
+        blockHash = blockhash(block.number - 1);
+        (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
+
         if (!checkSeed(firstPlayer) && !checkSeed(secondPlayer)){
+            emit DiceReveal(0, 0);
             endDraw();
+            return;
         }
 
         if (!checkSeed(firstPlayer)) {
+            emit DiceReveal(0, resultSecondPlayer);
             endWin(secondPlayer);
+            return;
         }
 
         if (!checkSeed(secondPlayer)) {
+            emit DiceReveal(resultFirstPlayer, 0);
             endWin(firstPlayer);
+            return;
         }
-
-        (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
-        emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
 
         if (resultFirstPlayer > resultSecondPlayer) {
+            emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
             endWin(firstPlayer);
+            return;
         }
         else if (resultFirstPlayer < resultSecondPlayer){
+            emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
             endWin(secondPlayer);
+            return;
         }
         else {
+            emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
             endDraw();
+            return;
         }
     }
 
