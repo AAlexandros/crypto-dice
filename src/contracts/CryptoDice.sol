@@ -101,7 +101,7 @@ contract CryptoDice {
         firstPlayerTemp.transfer(1 ether);
     }
 
-    function checkStateForEndOfTime() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
+    function endOfTime() external isInTheGame hasGameStarted didTimePassed(60) checkStateForEndOfTime {
         // Player wins the game because of the idleness of him opponent
         address payable winningPlayerTemp = msg.sender;
         if (revealedSeeds[firstPlayer] != 0) {
