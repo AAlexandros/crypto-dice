@@ -1,4 +1,4 @@
-const CryptoDice = artifacts.require("./CryptoDice_Antonov.sol")
+const CryptoDice = artifacts.require("./CryptoDice.sol")
 
 contract("Deployment tests", () => {
 	it("Should deploy smart contract properly", async() => {
