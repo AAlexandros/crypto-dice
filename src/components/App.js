@@ -41,6 +41,7 @@ class App extends Component {
     this.handleSubmit = this.handleSubmit.bind(this)
     this.handleHashedSeedChange = this.handleHashedSeedChange.bind(this)
     this.handleSeedChange = this.handleSeedChange.bind(this)
+    this.handleCancel = this.handleCancel.bind(this)
   }
 
   async componentWillMount() {
@@ -76,11 +77,13 @@ class App extends Component {
     this.setState({waitingInLobby: true})
   }
 
-  async handleCancel(){
+  async handleCancel(event){
+    event.preventDefault();
     const contract = this.state.contract
     try{
       await contract.methods.cancel().send({from: this.state.userAddress, gas:3000000});
-      window.location.reload(true)
+      this.setState({condfiguringContract : true})
+      this.setState({waitingInLobby : false})
     }
     catch (err) {
       alert('Failed to cancel. Maybe 2 minutes have not passed.')
@@ -215,7 +218,7 @@ class App extends Component {
     return (
       <div className="jumbotron">
         <p>Waiting in lobby ...</p>
-        <button className="btn btn-primary" onClick={() => this.handleCancel()}>Cancel</button>
+        <button className="btn btn-primary" onClick={this.handleCancel}>Cancel</button>
       </div>
     )
   }
@@ -262,7 +265,6 @@ class App extends Component {
     var symbolString = this.state.activeSymbolArray[index]
     var symbolImageUrl = SYMBOL_ARRAY[symbolString]
     var image = window.location.origin + symbolImageUrl
-    //var newImageArray = update(this.state.symbolArray, { [index]: {$set: SYMBOL_SHINY} })
     return (
      <div className="col-6"><img key={index}  src={image} data-id={index}/></div>
     )

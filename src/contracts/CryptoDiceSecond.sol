@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENCED
 pragma solidity 0.7.6;
 
-contract CryptoDice {
+contract CryptoDiceSecond {
     
     /*
         * State variables. These variables are saved in the state on the contract.
@@ -153,7 +153,7 @@ contract CryptoDice {
         
     }
 
-    function ur2slow() external checkBothReveal didTimePassed(300) {
+    function endOfTime() external checkBothReveal didTimePassed(300) {
         address payable winningPlayerTemp = msg.sender;
         emit Winner(0,0,winningPlayerTemp);
         clearGame();

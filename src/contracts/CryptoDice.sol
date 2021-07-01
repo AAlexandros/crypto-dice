@@ -8,7 +8,7 @@ contract CryptoDice {
     */
     uint n = 16;
 
-    // Because the modulo will take 0-DICE_MAX values, we use DICE_MAX=5 and add 1
+    // The max of the dice
     uint DICE_MAX = 6;
 
 
@@ -17,6 +17,7 @@ contract CryptoDice {
         * Every change of these variables costs gas, and so should be done with caution.
     */
 
+    // The owner of the contract.
     address payable private owner;
     // Used to lock owner's profit while a game is conducted.
     uint private ownersProfitLocked;
@@ -27,7 +28,7 @@ contract CryptoDice {
     // The timestamp of the block, when the first player joined.
     uint private firstPlayerJoinedTime;
 
-    // The timer to count the time the second has to commit his initial seed.
+    // The timer to count the time the second has left to commit his initial seed.
     uint private timer;
 
     bytes32 private blockHash;
@@ -80,6 +81,7 @@ contract CryptoDice {
         // Keep track of the time passed from the dice reveal.
         timer = block.timestamp;
         revealedSeeds[msg.sender] = _seed;
+        // If both players have committed their seeds, conclude the game.
         if (revealedSeeds[firstPlayer] != 0 && revealedSeeds[secondPlayer] != 0) {
             endGame();
         }
@@ -99,7 +101,7 @@ contract CryptoDice {
         firstPlayerTemp.transfer(1 ether);
     }
 
-    function endOfTime() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
+    function checkStateForEndOfTime() external isInTheGame hasGameStarted didTimePassed(60) checkStateForUr2slow {
         // Player wins the game because of the idleness of him opponent
         address payable winningPlayerTemp = msg.sender;
         if (revealedSeeds[firstPlayer] != 0) {
@@ -124,24 +126,25 @@ contract CryptoDice {
         blockHash = blockhash(block.number - 1);
         (uint resultFirstPlayer, uint resultSecondPlayer) = getRandoms();
 
+        // if both players committed wrong seeds, end with a tie
         if (!checkSeed(firstPlayer) && !checkSeed(secondPlayer)){
             emit DiceReveal(0, 0);
             endDraw();
             return;
         }
-
+        // if one of the players committed a wrong seed, his die result becomes 0.
         if (!checkSeed(firstPlayer)) {
             emit DiceReveal(0, resultSecondPlayer);
             endWin(secondPlayer);
             return;
         }
-
         if (!checkSeed(secondPlayer)) {
             emit DiceReveal(resultFirstPlayer, 0);
             endWin(firstPlayer);
             return;
         }
 
+        // The player with the biggest result wins.
         if (resultFirstPlayer > resultSecondPlayer) {
             emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
             endWin(firstPlayer);
@@ -152,6 +155,7 @@ contract CryptoDice {
             endWin(secondPlayer);
             return;
         }
+        // If both results are equal, the game ends with a draw.
         else {
             emit DiceReveal(resultFirstPlayer, resultSecondPlayer);
             endDraw();
@@ -241,7 +245,7 @@ contract CryptoDice {
         _;
     }
 
-    modifier checkStateForUr2slow() {
+    modifier checkStateForEndOfTime() {
         // A player cannot call this function if he hasn't committed revealed his seed.
         require(revealedSeeds[msg.sender] != 0, "You can not cancel the game you haven't revealed your seed.");
         _;
@@ -283,19 +287,7 @@ contract CryptoDice {
         return keccak256(abi.encodePacked(revealedSeeds[player])) == hashSeeds[player];
     }
 
-    function toBytes(bytes32 x) public pure returns (bytes memory b) {
-        b = new bytes(32);
-        assembly { mstore(add(b, 32), x) }
-    }
-
     function isEmpty(address _addressToCheck) internal pure returns (bool isEmpty_) {
         isEmpty_ =  _addressToCheck == address(0);
-    }
-
-    function getOtherPlayer(address player) internal view returns (address payable) {
-        if (player == firstPlayer) {
-            return secondPlayer;
-        }
-        return firstPlayer;
     }
 }
