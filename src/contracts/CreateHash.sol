@@ -11,4 +11,8 @@ contract CreateHash{
         return keccak256(abi.encodePacked(_hash));
     }
     
+    function checkHash(bytes32 _hash, bytes32 _seed) public pure returns(bytes32, bytes32,bytes32, bool){
+        return (keccak256(abi.encodePacked(_seed)), _hash, _seed, keccak256(abi.encodePacked(_seed))==_hash) ;
+    }
+    
 }
