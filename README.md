@@ -4,9 +4,9 @@ A blockchain implementation of a simple dice game where players take turns rolli
 
 The implementation is designed to ensure two basic security properties.
 <ol>
-  <li>**Integrity**: Any attempt by an attacker to alter actions taken by players is prevented, as actions are committed 
+  <li>Integrity: Any attempt by an attacker to alter actions taken by players is prevented, as actions are committed 
     through signed transactions, publicly recorded on the blockchain.</li>
-  <li>**Indisputable Correctness**: The code determining the game's winner is openly available on the blockchain. 
+  <li>Indisputable Correctness: The code determining the game's winner is openly available on the blockchain. 
     This transparency allows players to verify that no cheating or bugs are involved, a level of assurance not possible in client-server application architectures.</li>
 </ol>
  
